@@ -1,7 +1,13 @@
-import requests
-obj = requests.get('http://api.conceptnet.io/c/en/food').json()
+#Import wordnet from the NLTK
 
-for i in range(len(obj['edges'])):
- print(obj['edges'][i]['end']['label'])
- for key in ['rel','surfaceText']:
-  print(obj['edges'][i][key])
+import nltk
+from nltk.corpus import wordnet
+syn = list()
+ant = list()
+for synset in wordnet.synsets("food"):
+   for lemma in synset.lemmas():
+      syn.append(lemma.name())
+      if lemma.antonyms():
+        ant.append(lemma.antonyms()[0].name())
+print('Synonyms: ' + str(syn))
+print('Antonyms: ' + str(ant))
