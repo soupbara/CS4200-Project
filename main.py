@@ -5,6 +5,7 @@ import random
 apiClient = ConceptNetClient()
 apiClient.printCurrJson()
 apiClient.printEdges()
+userPreferences = []
 
 #Purpose:  Given a list of valid options (ints), ensure user inputs one of the options. Used many time for random prompts.
 def getValidChoice(prompt, options):
@@ -33,24 +34,23 @@ def printMenu():
 
 #Purpose: Use API to figure out what question to return next, format the question as a string and return it. Used by game()
 def findNextQuestion(currentQuestion):
- #TODO: change to dictionary instead of list to help with userPreferences in game()
- category = ["Are you looking for breakfast? (1) Yes, (2) No", "Are you looking for lunch? (1) Yes, (2) No", "Are you looking for dinner? (1) Yes, (2) No", "Are you looking for desserts? (1) Yes, (2) No"]
- portion = ["Do you want a full meal? (1) Yes, (2) No", "Do you want a snack? (1) Yes, (2) No", "Would you like finger food? (1) Yes, (2) No", "Would you like ready-to-eat food? (1) Yes, (2) No"]
- type = ["Would you like a beverage? (1) Yes, (2) No", "Would you like solid food? (1) Yes, (2) No", "Would you like semi-solid food? (1) Yes, (2) No"]
- flavor = ["Would you like something sweet? (1) Yes, (2) No", "Would you like something savory? (1) Yes, (2) No", "Would you like something sour? (1) Yes, (2) No", "Would you like spicy food? (1) Yes, (2) No", "Would you like something bitter? (1) Yes, (2) No"]
- restriction = ["Do you want something vegan? (1) Yes, (2) No", "Are you able to eat pork? (1) Yes, (2) No", "Are you able to eat gluten? (1) Yes, (2) No", "Are you able to eat nuts? (1) Yes, (2) No", "Are you able to eat dairy products? (1) Yes, (2) No"]
+ category = {"breakfast":"Are you looking for breakfast? (1) Yes, (2) No", "lunch":"Are you looking for lunch? (1) Yes, (2) No", "dinner":"Are you looking for dinner? (1) Yes, (2) No", "dessert":"Are you looking for desserts? (1) Yes, (2) No"}
+ portion = {"full meal":"Do you want a full meal? (1) Yes, (2) No", "snack":"Do you want a snack? (1) Yes, (2) No", "finger food":"Would you like finger food? (1) Yes, (2) No", "ready-to-eat":"Would you like ready-to-eat food? (1) Yes, (2) No"}
+ type = {"beverage":"Would you like a beverage? (1) Yes, (2) No", "solid food":"Would you like solid food? (1) Yes, (2) No", "semi-solid food":"Would you like semi-solid food? (1) Yes, (2) No"}
+ flavor = {"sweet":"Would you like something sweet? (1) Yes, (2) No", "savory":"Would you like something savory? (1) Yes, (2) No", "sour":"Would you like something sour? (1) Yes, (2) No", "spicy":"Would you like spicy food? (1) Yes, (2) No", "bitter":"Would you like something bitter? (1) Yes, (2) No"}
+ restriction = {"vegan":"Do you want something vegan? (1) Yes, (2) No", "meat":"Are you able to eat meat? (1) Yes, (2) No", "gluten":"Are you able to eat gluten? (1) Yes, (2) No", "nuts":"Are you able to eat nuts? (1) Yes, (2) No", "dairy":"Are you able to eat dairy products? (1) Yes, (2) No"}
 
  #Randomly select a question to ask, however it may repeat if the user continuously answers 'no'
  if currentQuestion == 1:
-     return category[random.randint(0,len(category)-1)]
+     return random.choice(list(category.items()))
  if currentQuestion == 2:
-     return portion[random.randint(0,len(portion)-1)]
+     return random.choice(list(portion.items()))
  if currentQuestion == 3:
-     return type[random.randint(0,len(type)-1)]
+     return random.choice(list(type.items()))
  if currentQuestion == 4:
-     return flavor[random.randint(0,len(flavor)-1)]
+     return random.choice(list(flavor.items()))
  else:
-     return restriction[random.randint(0,len(restriction)-1)]
+     return random.choice(list(restriction.items()))
 
 
 #Purpose: Use API to determine if we found a good enough answer! E.g. is there anything else we could ask, how confident are we in this answer, etc.
@@ -62,26 +62,24 @@ def gameFinished():
 #Purpose:  Runs one whole game of Crave! Uses findNextQuestion(), gameFinished(), and get
 def game():
  currentCategory = 1
- userPreferences = []
  notDone = True
 
  while notDone:
   #1.) Ask a question + provide choices
      #Make + call method to find a question to ask
   question = findNextQuestion(currentCategory)
-  choice = getValidChoice(question, [1,2])
+  choice = getValidChoice(question[1], [1,2])
 
   #2.) Get validated choice
   # Only move to next question category after user has answered 'yes'
   if choice == 1:
       currentCategory = currentCategory + 1
-
-      #TODO: change questions to dictionaries to help with userPreferences
-      userPreferences.append(question) #saves the questions the user answer 'yes for, to help look for a suitable food item
+      userPreferences.append(question[0]) #saves the attributes the user answers 'yes', to help look for a suitable food item in API
 
       # 3.) Check if can finish game
       # Change notDone game finished
       if currentCategory == 6:
+          print("User Preferences: " + str(userPreferences))
           gameFinished() #return the suggested food
           notDone = False
 
