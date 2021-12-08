@@ -1,6 +1,7 @@
 #testing commit
 from client import ConceptNetClient
 import random
+import requests
 
 apiClient = ConceptNetClient()
 apiClient.printCurrJson()
@@ -55,7 +56,20 @@ def findNextQuestion(currentQuestion):
 
 #Purpose: Use API to determine if we found a good enough answer! E.g. is there anything else we could ask, how confident are we in this answer, etc.
 def gameFinished():
- print("Answer generated! You might enjoy: ")
+ path = 'http://api.conceptnet.io/c/en/' + userPreferences[0] #Add the user's data to the path (first item in userPreferences)
+ obj = requests.get(path).json() #Get method to retrieve the data
+ index = 0
+
+ #Print out results from ConceptNet
+ for i in range(len(obj['edges'])):
+     print(obj['edges'][i]['end']['label'])
+     #if '/r/IsA' in obj['edges'][i]['end']['label']:
+         #index = i
+     for key in ['rel', 'surfaceText']:
+         print(obj['edges'][i][key])
+
+ #Print suggested item to user
+ print("Answer generated! You might enjoy: " + str(obj['edges'][index][key]))
  print("---------------------------------------\n")
 
 
