@@ -67,9 +67,48 @@ def getOverallRelatedness(phrase):
             max = currVal
     return max
 
+#Purpose:  Given a List<String> of valid answers to add into global possibleAnswers, correctly insert it where every Answer's probability is updated + no duplicate terms
+def insertUpdatePossibleAnswers(newAttribute, validPossAnswers):
+    #1.) Iterate through possibleAnswers and update ALL probabilities of ALL possible answers based on what has and hasn't been seen this iteration
+    for key in possibleAnswers.keys():
+        answer = possibleAnswers.get(key)
+
+        # if already have the answer in possibleAnswers --> increase probability, add this newAttribute it qualifies for
+        if key in validPossAnswers:
+            answer.addProbability()
+            answer.addAttribute(newAttribute)
+
+            # remove from validPossAnswers:
+            validPossAnswers.remove(key)
+
+        # Otherwise --> we didn't see this answer this iteration --> decrease probability
+        else:
+            answer.subProbability()
+            # is the probability too low now? yes --> remove it and no longer consider it for future purposes
+            if answer.getProbability() < MIN_PROBABILITY:
+                print("possAnswers length before pop: " + str(len(possibleAnswers)))
+                possibleAnswers.pop(key)
+                print("possAnswers length after pop: " + str(len(possibleAnswers)))
+                nonpossibleAnswers[key] = answer
+
+    #2.) At this point, validPossAnswers should only be filled with Answer labels that are NOT yet in possibleAnswers{} --> can add it now:
+    for answerLabel in validPossAnswers:
+        if not (answerLabel in nonpossibleAnswers.keys()):
+            possibleAnswers[answerLabel] = Answer(newAttribute, answerLabel)
+
+    #for testing reasons:
+    print("possAnswers:  ")
+    for answer in possibleAnswers.items():
+        print(answer[1].getLabel())
+
+
 #Purpose: Use API to figure out what question to return next, format the question as a string and return it. Used by game()
 def findNextQuestion():
     global initializedAnswers, MIN_POSS_ANSWERS, possibleAnswers, allAttributes, nonpossibleAnswers
+
+    #Because findNextQuestion() gets called many times, just update flag, initializedAnswers, whenever applicable
+    if len(possibleAnswers) >= MIN_POSS_ANSWERS:
+        initializedAnswers = True
 
     #1.) Do we have enough in our possibleAttributes to choose randomly, or choose only on general food?
     if initializedAnswers:
@@ -120,52 +159,46 @@ def findNextQuestion():
                             if rootWord is not None:
                                 label = rootWord               #only ever stores ROOT words, --> easier to check, don't have to worry about any different forms
                             print('after getting root and removing articles: '+label)
+
+
                             #If label IS a food, and NOT yet in possibleAnswers, store into validPossAnswers to incorporate into possibleAnswers later:
                             if apiClient.getIsFood(label):
                                 validPossAnswers.append(label)
 
-
-                                # if not (label in possibleAnswers.keys()):
-                                #     possibleAnswers[label] = Answer(newAttribute, label)
-                                #
-                                # #If already seen this word --> increase probability, add this newAttribute it qualifies for
-                                # else:
-                                #     answer = Answer(possibleAnswers.get(label))
-                                #     answer.addProbability()
-                                #     answer.addAttribute(newAttribute)
-
                         #3.) Now we know what should be inside possibleAnswers bc validPossAnswers is populated
                         #           --> iterate through possibleAnswers and update ALL probabilities of ALL possible answers based on what has and hasn't been seen this iteration
-                        for key in possibleAnswers.keys():
-                            answer = Answer(possibleAnswers.get(key))
-                            #if we already have the answer in possibleAnswers --> increase probability, add this newAttribute it qualifies for
-                            if key in validPossAnswers:
-                                answer.addProbability()
-                                answer.addAttribute(newAttribute)
+                        # for key in possibleAnswers.keys():
+                        #     answer = Answer(possibleAnswers.get(key))
+                        #     #if we already have the answer in possibleAnswers --> increase probability, add this newAttribute it qualifies for
+                        #     if key in validPossAnswers:
+                        #         answer.addProbability()
+                        #         answer.addAttribute(newAttribute)
+                        #
+                        #         #remove from validPossAnswers:
+                        #         validPossAnswers.remove(key)
+                        #
+                        #     #We didn't see this answer this iteration --> decrease probability
+                        #     else:
+                        #         answer.subProbability()
+                        #         #is the probability too low now? yes --> remove it and no longer consider it for the future purposes
+                        #         if answer.getProbability() < MIN_PROBABILITY:
+                        #             print("possAnswers length before pop: " + str(len(possibleAnswers)))
+                        #             possibleAnswers.pop(key)
+                        #             print("possAnswers length after pop: " + str(len(possibleAnswers)))
+                        #             nonpossibleAnswers[key] = answer
+                        #
+                        # #4.) At this point, validPossAnswers should only be filled with Answer labels that are NOT yet in possibleAnswers{} --> can add it now:
+                        # for answerLabel in validPossAnswers:
+                        #     if not(answerLabel in nonpossibleAnswers.keys()):
+                        #         possibleAnswers[answerLabel] = Answer(newAttribute, answerLabel)
+                        #
+                        #
+                        # #for testing reasons:
+                        # print("possAnswers:  ")
+                        # for answer in possibleAnswers.items():
+                        #     print(answer[1].getLabel())
 
-                                #remove from validPossAnswers:
-                                validPossAnswers.remove(key)
-
-                            #We didn't see this answer this iteration --> decrease probability
-                            else:
-                                answer.subProbability()
-                                #is the probability too low now? yes --> remove it and no longer consider it for the future purposes
-                                if answer.getProbability() < MIN_PROBABILITY:
-                                    print("possAnswers length before pop: " + str(len(possibleAnswers)))
-                                    possibleAnswers.pop(key)
-                                    print("possAnswers length after pop: " + str(len(possibleAnswers)))
-                                    nonpossibleAnswers[key] = answer
-
-                        #4.) At this point, validPossAnswers should only be filled with Answer labels that are NOT yet in possibleAnswers{} --> can add it now:
-                        for answerLabel in validPossAnswers:
-                            if not(answerLabel in nonpossibleAnswers.keys()):
-                                possibleAnswers[answerLabel] = Answer(newAttribute, answerLabel)
-
-
-                        #for testing reasons:
-                        print("possAnswers:  ")
-                        for answer in possibleAnswers.items():
-                            print(answer[1].getLabel())
+                        insertUpdatePossibleAnswers(newAttribute, validPossAnswers)
 
 
 
@@ -173,12 +206,30 @@ def findNextQuestion():
         else:
             edges = apiClient.getTypesOf(apiClient.getFoodURI())
 
-            #Choose random sample of of random size of edges to look at
+            #Choose random sample of of random size (max of 20) of edges to look at
             section = random.sample(list(edges), random.randint(1, 20 if len(edges) > 20 else len(edges)))
 
+            #Get the label, add a new Answer obj if its not yet in possibleAnswers AND is not banned in nonpossibleAnswers
+            for node in section:
+                answerLabel = node["start"]["label"]
+                answerLabel = apiClient.removeArticlesIn(answerLabel)
+                rootWord = apiClient.getRootWord(apiClient.getURI(answerLabel))
+                if rootWord is not None:
+                    answerLabel = rootWord
 
-        if len(possibleAnswers) >= MIN_POSS_ANSWERS:
-            initializedAnswers = True
+                if not (answerLabel in possibleAnswers.keys()) and not (answerLabel in nonpossibleAnswers.keys()):
+                        possibleAnswers[answerLabel] = Answer(None, answerLabel)
+
+            #just for testing reasons
+            print("possAnswers:  ")
+            for answer in possibleAnswers.items():
+                print(answer[1].getLabel())
+
+            #Call again to keep initializing possibleAnswers, and eventually actually ask question
+            print("calling findNextQuestion() again")
+            findNextQuestion()
+
+
 
 
 findNextQuestion()

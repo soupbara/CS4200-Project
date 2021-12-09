@@ -93,7 +93,7 @@ class ConceptNetClient:
 
     #Properties:     Get all words that are types of this uri
     def getTypesOf(self, endUri):
-        return self.makeRequest("/query?end=" + endUri + "&rel=/r/IsA")
+        return self.makeRequest("/query?end=" + endUri + "&rel=/r/IsA").get("edges")
 
     #Purpose:   Get the specific edge if this startUri IS a type of this endUri
     def confirmTypeOf(self, startUri, endUri):
@@ -149,7 +149,7 @@ class ConceptNetClient:
                 return True
 
             #Case 3: if the typesOf this phrase are foods
-            typesOfPhrase = self.getTypesOf(phraseUri).get("edges")
+            typesOfPhrase = self.getTypesOf(phraseUri)
             counter = 1
             for node in typesOfPhrase:
                 if counter < 2:         #let's say if the first 2 aren't foods, let's not bother checking the rest.
