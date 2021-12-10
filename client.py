@@ -1,3 +1,5 @@
+import random
+
 import requests
 
 class ConceptNetClient:
@@ -59,6 +61,25 @@ class ConceptNetClient:
              print("your code didn't match anything")
              return None
 
+    def getRandomCategory(self):
+        arbitraryInt = random.randint(1, 5)
+        if arbitraryInt == 0:           #I took this out of the range b/c I don't think its gonna work.
+            return self.RELATION_GET_TYPE
+        elif arbitraryInt == 1:
+            return self.RELATION_PROPERTY
+        elif arbitraryInt == 2:
+            return self.RELATION_USED_FOR
+        elif arbitraryInt == 3:
+            return self.RELATION_MADE_OF
+        elif arbitraryInt == 4:
+            return self.RELATION_CAN_BE
+        else:
+            return self.RELATION_CAPABLE
+
+    def getAllRelations(self):
+        # return [self.RELATION_GET_TYPE, self.RELATION_PROPERTY, self.RELATION_USED_FOR, self.RELATION_MADE_OF, self.RELATION_CAN_BE, self.RELATION_CAPABLE]
+        return [self.RELATION_PROPERTY, self.RELATION_USED_FOR, self.RELATION_MADE_OF, self.RELATION_CAN_BE, self.RELATION_CAPABLE]
+
     def removeArticlesIn(self, word):
         if "the " in word:
             word = word.removeprefix("the ")
@@ -87,9 +108,13 @@ class ConceptNetClient:
     def getRelationTypesBw(self, uri1, uri2):
         return self.makeRequest("/query?node=" + uri1 + "&other=" + uri2)
 
-    #Purpose:     Get all properties of this uri
+
+    #Purpose:     Get all properties of this things
     def getPropertiesOf(self, startUri):
-        return self.makeRequest("/query?start="+startUri+"&rel=/r/HasProperty")
+        return self.makeRequest("/query?start="+startUri+"&rel=/r/HasProperty").get("edges")
+    def thingsWithPropertiesOf(self, endUri):
+        return self.makeRequest("/query?end=" + endUri + "&rel=/r/HasProperty").get("edges")
+
 
     #Properties:     Get all words that are types of this uri
     def getTypesOf(self, endUri):
@@ -99,18 +124,35 @@ class ConceptNetClient:
     def confirmTypeOf(self, startUri, endUri):
         return self.makeRequest("/query?start=" + startUri + "&end="+endUri + "&rel=/r/IsA").get("edges")
 
+
     def getWhatMadeOf(self, startUri):
-        return self.makeRequest("/query?node="+startUri+"&rel=/r/MadeOf")
+        return self.makeRequest("/query?start="+startUri+"&rel=/r/MadeOf").get("edges")
+    def getThingsMadeOf(self, endUri):
+        return self.makeRequest("/query?end=" + endUri + "&rel=/r/MadeOf").get("edges")
 
     def getLocationOf(self, startUri):
         return self.makeRequest(("/query?start="+startUri+"&rel=/r/AtLocation")).get("edges")
-
     def getWhatIsLocatedAt(self, endUri, limitCount):
         return requests.get(self.BASE_URL + "/query?end="+endUri+"&rel=/r/AtLocation&limit="+str(limitCount)).json().get("edges")
         #return self.makeRequest(("/query?end="+endUri+"&rel=/r/AtLocation&limit="+str(limitCount))).get("edges")
 
+
+    def getCanBe(self, startUri):
+        return self.makeRequest(("/query?start=" + startUri + "&rel=/r/ReceivesAction")).get("edges")
+    def getThingsThatCan(self, endUri):
+        return self.makeRequest(("/query?end=" + endUri + "&rel=/r/ReceivesAction")).get("edges")
+
     def getWhatUsedFor(self, startUri):
         return self.makeRequest(("/query?start=" + startUri + "&rel=/r/UsedFor")).get("edges")
+    def thingsUsedFor(self, endUri):
+        return self.makeRequest(("/query?end=" + endUri + "&rel=/r/UsedFor")).get("edges")
+
+
+    def getWhatCapableOf(self, startUri):
+        return self.makeRequest(("/query?start=" + startUri + "&rel=/r/CapableOf")).get("edges")
+    def getThingsCapableOf(self, endUri):
+        return self.makeRequest(("/query?end=" + endUri + "&rel=/r/CapableOf")).get("edges")
+
 
     #Purpose:   Returns the actual root word as a string. Just chooses the first result (highest weight) though, which may be buggy
     def getRootWord(self, startUri):
