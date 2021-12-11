@@ -44,7 +44,7 @@ class ConceptNetClient:
         return "/c/en/food"
 
     def makeRequest(self, queryString):
-        print(self.BASE_URL + queryString)
+        #--commenting out debug strings --print(self.BASE_URL + queryString)
         jsonResponse = requests.get(self.BASE_URL + queryString).json()
 
         # if the id of jsonResponse isn't our queryString, our response is wrong
@@ -96,7 +96,7 @@ class ConceptNetClient:
         word = self.removeArticlesIn(word)
         if word.find(' ') != -1:
             word = word.replace(' ', '_')
-            print("new edgeLabel: " + word)
+            #--commenting out debug strings --print("new edgeLabel: " + word)
         return "/c/en/"+word
 
     def getRelatednessVal(self, startUri, endUri):
@@ -112,9 +112,9 @@ class ConceptNetClient:
     #Purpose:     Get all properties of this things
     def getPropertiesOf(self, startUri):
         return self.makeRequest("/query?start="+startUri+"&rel=/r/HasProperty").get("edges")
-    def thingsWithPropertiesOf(self, endUri):
-        return self.makeRequest("/query?end=" + endUri + "&rel=/r/HasProperty").get("edges")
-
+    def thingsWithPropertiesOf(self, endUri, limitCount):
+        #return self.makeRequest("/query?end=" + endUri + "&rel=/r/HasProperty").get("edges")
+        return requests.get(self.BASE_URL + "/query?end=" + endUri + "&rel=/r/HasProperty&limit=" + str(limitCount)).json().get("edges")
 
     #Properties:     Get all words that are types of this uri
     def getTypesOf(self, endUri):
@@ -127,8 +127,10 @@ class ConceptNetClient:
 
     def getWhatMadeOf(self, startUri):
         return self.makeRequest("/query?start="+startUri+"&rel=/r/MadeOf").get("edges")
-    def getThingsMadeOf(self, endUri):
-        return self.makeRequest("/query?end=" + endUri + "&rel=/r/MadeOf").get("edges")
+    def getThingsMadeOf(self, endUri, limitCount):
+        #return self.makeRequest("/query?end=" + endUri + "&rel=/r/MadeOf").get("edges")
+        return requests.get(self.BASE_URL + "/query?end=" + endUri + "&rel=/r/MadeOf&limit="+str(limitCount)).json().get("edges")
+
 
     def getLocationOf(self, startUri):
         return self.makeRequest(("/query?start="+startUri+"&rel=/r/AtLocation")).get("edges")
@@ -137,21 +139,42 @@ class ConceptNetClient:
         #return self.makeRequest(("/query?end="+endUri+"&rel=/r/AtLocation&limit="+str(limitCount))).get("edges")
 
 
+    # Bc this one can return a lot of RANDOM things --> filter through and only return those with valid sentence phrases:
     def getCanBe(self, startUri):
-        return self.makeRequest(("/query?start=" + startUri + "&rel=/r/ReceivesAction")).get("edges")
-    def getThingsThatCan(self, endUri):
-        return self.makeRequest(("/query?end=" + endUri + "&rel=/r/ReceivesAction")).get("edges")
+        response = self.makeRequest(("/query?start=" + startUri + "&rel=/r/ReceivesAction")).get("edges")
+        keyphrases = ["Made from", "made from", "Used in", "used in", "Eaten with", "eaten with", "sweet", "salty", "bitter", "flavor", "spicy", "happy"]
+        filteredEdges = []
+        for node in response:
+            if node["end"]["label"] in keyphrases:
+                filteredEdges.append(node)
+
+        return filteredEdges
+
+    def getThingsThatCan(self, endUri, limitCount):
+        #return self.makeRequest(("/query?end=" + endUri + "&rel=/r/ReceivesAction")).get("edges")
+        return requests.get(self.BASE_URL + "/query?end=" + endUri + "&rel=/r/ReceivesAction&limit="+str(limitCount)).json().get("edges")
+
 
     def getWhatUsedFor(self, startUri):
         return self.makeRequest(("/query?start=" + startUri + "&rel=/r/UsedFor")).get("edges")
-    def thingsUsedFor(self, endUri):
-        return self.makeRequest(("/query?end=" + endUri + "&rel=/r/UsedFor")).get("edges")
+    def thingsUsedFor(self, endUri, limitCount):
+        #return self.makeRequest(("/query?end=" + endUri + "&rel=/r/UsedFor")).get("edges")
+        return requests.get(self.BASE_URL + "/query?end=" + endUri + "&rel=/r/UsedFor&limit=" + str(limitCount)).json().get("edges")
 
 
     def getWhatCapableOf(self, startUri):
-        return self.makeRequest(("/query?start=" + startUri + "&rel=/r/CapableOf")).get("edges")
-    def getThingsCapableOf(self, endUri):
-        return self.makeRequest(("/query?end=" + endUri + "&rel=/r/CapableOf")).get("edges")
+        response = self.makeRequest(("/query?start=" + startUri + "&rel=/r/CapableOf")).get("edges")
+        keyphrases = ["Spread on", "spread on", "sweet", "salty", "bitter", "flavor", "spicy", "happy"]
+        filteredEdges = []
+        for node in response:
+            if node["end"]["label"] in keyphrases:
+                filteredEdges.append(node)
+
+        return filteredEdges
+
+    def getThingsCapableOf(self, endUri, limitCount):
+        #return self.makeRequest(("/query?end=" + endUri + "&rel=/r/CapableOf")).get("edges")
+        return requests.get(self.BASE_URL + "/query?end=" + endUri + "&rel=/r/CapableOf&limit=" + str(limitCount)).json().get("edges")
 
 
     #Purpose:   Returns the actual root word as a string. Just chooses the first result (highest weight) though, which may be buggy

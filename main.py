@@ -16,19 +16,32 @@ apiClient = ConceptNetClient()
 # print(apiClient.getRelatednessVal(apiClient.getURI("celebration"), apiClient.getFoodURI()))
 #print(apiClient.getRootWord(apiClient.getURI("pies")))
 
-#possibleAnswers = {}    #track which Answers are still valid in choosing
-allAttributes = []      #track history of all positive Attributes
+possibleAnswers = {}    #track which Answers are still valid in choosing
+allPosAttributes = {}      #track history of all positive Attributes
+allNegAttributes = {}
 nonpossibleAnswers = {}     #track which Answers we've already decided to throw out --> do NOT attempt to add it again!
 
-possibleAnswers = {"Peanut butter": Answer(None, "Peanut butter"),
-"nutriment" : Answer(None, "nutriment"),
-"chocolate" : Answer(None, "chocolate")}
+# possibleAnswers = {"Peanut butter": Answer(None, "Peanut butter"),
+# "milk" : Answer(None, "milk"),
+# "chocolate" : Answer(None, "chocolate"),
+# "chicken" : Answer(None, "chicken"),
+# "pizza" : Answer(None, "pizza"),
+# "soup" : Answer(None, "soup"),
+# "salmon" : Answer(None, "salmon")}
 
 userPreferences = []
 
 MIN_POSS_ANSWERS = 3       #certain length of possibleAnswers[] necessary before able to create questions based on these probable answers.
 initializedAnswers = False
-MIN_PROBABILITY = 0.07
+MIN_PROBABILITY = 0.07      #to stop tracking answer
+MIN_RELATEDNESS = 0.1
+MIN_WINNING_PROBABILITY = 0.55       #TODO: change to better values
+
+
+#Things to do:
+# should technically be keeping track of all Attributes/Questions asked to ALSO not ask questions that said No to
+
+#check stop game conditions --> check probabilities
 
 #Purpose:  Given a list of valid options (ints), ensure user inputs one of the options. Used many time for random prompts.
 def getValidChoice(prompt, options):
@@ -74,13 +87,14 @@ def getOverallRelatedness(phrase):
 def insertUpdatePossibleAnswers(newAttribute, validPossAnswers):
     global possibleAnswers, MIN_PROBABILITY
     #1.) Iterate through possibleAnswers and update ALL probabilities of ALL possible answers based on what has and hasn't been seen this iteration
-    for key in possibleAnswers.keys():
+    for key in list(possibleAnswers):
         answer = possibleAnswers.get(key)
 
         # if already have the answer in possibleAnswers --> increase probability, add this newAttribute it qualifies for
         if key in validPossAnswers:
             answer.addProbability()
             answer.addAttribute(newAttribute)
+            possibleAnswers[answer.getLabel()] = answer
 
             # remove from validPossAnswers:
             validPossAnswers.remove(key)
@@ -88,22 +102,26 @@ def insertUpdatePossibleAnswers(newAttribute, validPossAnswers):
         # Otherwise --> we didn't see this answer this iteration --> decrease probability
         else:
             answer.subProbability()
+            possibleAnswers[answer.getLabel()] = answer
+
             # is the probability too low now? yes --> remove it and no longer consider it for future purposes
             if answer.getProbability() < MIN_PROBABILITY:
-                print("possAnswers length before pop: " + str(len(possibleAnswers)))
+                #--commenting out debug strings --print("possAnswers length before pop: " + str(len(possibleAnswers)))
                 possibleAnswers.pop(key)
-                print("possAnswers length after pop: " + str(len(possibleAnswers)))
+                #--commenting out debug strings --print("possAnswers length after pop: " + str(len(possibleAnswers)))
                 nonpossibleAnswers[key] = answer
 
     #2.) At this point, validPossAnswers should only be filled with Answer labels that are NOT yet in possibleAnswers{} --> can add it now:
     for answerLabel in validPossAnswers:
-        if not (answerLabel in nonpossibleAnswers.keys()):
+        if not (answerLabel in list(nonpossibleAnswers)):
             possibleAnswers[answerLabel] = Answer(newAttribute, answerLabel)
 
     #for testing reasons:
-    print("possAnswers:  ")
+    #--commenting out debug strings --print("possAnswers:  ")
     for answer in possibleAnswers.items():
-        print(answer[1].getLabel())
+        pass
+        #print(answer[1].getLabel() + "  probability:  " + str(answer[1].getProbability()))
+
 
 #Purpose:   Choose a random possible answer and category to ask about it. Return a tuple with (answerChosen, categoryType, list of resulting edges from query)
 def generateRandomQuery(uri, randomCategory):
@@ -134,28 +152,45 @@ def getThingsAboutRelation(uri, category):
     global possibleAnswers, apiClient
 
     if category == apiClient.RELATION_PROPERTY:
-        return apiClient.thingsWithPropertiesOf(uri)
+        return apiClient.thingsWithPropertiesOf(uri, 20)
 
     elif category == apiClient.RELATION_GET_TYPE:       #took out of range, don't worry about this conditional for now
-        return apiClient.getTypesOf(uri)
+        return apiClient.getTypesOf(uri, 20)
 
     elif category == apiClient.RELATION_USED_FOR:
-        return apiClient.thingsUsedFor(uri)
+        return apiClient.thingsUsedFor(uri, 20)
 
     elif category == apiClient.RELATION_CAPABLE:
-        return apiClient.getThingsCapableOf(uri)
+        return apiClient.getThingsCapableOf(uri, 20)
 
     elif category == apiClient.RELATION_CAN_BE:
-        return apiClient.getThingsThatCan(uri)
+        return apiClient.getThingsThatCan(uri, 20)
 
     else:       # randomCategory == apiClient.RELATION_MADE_OF:
-        return apiClient.getThingsMadeOf(uri)
+        return apiClient.getThingsMadeOf(uri, 20)
 
 
+#Purpose: Given possible edges to ask about, pick a random good (high enough relatedness value) edge.
+def findValidEdge(possibleEdges):
+    while True:
+        # Continue looking for validEdge if there are still possibleEdges
+        if len(possibleEdges) > 0:
+            # 1.) Pick a random index/random edge + see if it has high enough relatedness to "food"
+            rIndex = random.randint(0, len(possibleEdges) - 1)
+            print(rIndex)
 
-#Purpose: Use API to figure out what question to return next, format the question as a string and return it. Used by game()
-def findNextQuestion():
-    global apiClient, initializedAnswers, MIN_POSS_ANSWERS, possibleAnswers, allAttributes, nonpossibleAnswers
+            possibleEdge = possibleEdges[rIndex]["end"]["label"]  # "end" is correct only for our current methods
+            print(possibleEdge)
+            del possibleEdges[rIndex]  # remove this edge from dictionary to not re-do it again if it doesn't work out
+
+            # possibleEdge has enough relatedness to ask a question about it! --> get out of while
+            if getOverallRelatedness(possibleEdge) > MIN_RELATEDNESS and not (possibleEdge in list(allPosAttributes)) and not (possibleEdge in list(allNegAttributes)):
+                return possibleEdge
+    return None
+
+
+def TestfindNextQuestion():
+    global apiClient, initializedAnswers, MIN_POSS_ANSWERS, possibleAnswers, allPosAttributes, nonpossibleAnswers, MIN_RELATEDNESS
 
     #Because findNextQuestion() gets called many times, just update flag, initializedAnswers, whenever applicable
     if len(possibleAnswers) >= MIN_POSS_ANSWERS:
@@ -172,15 +207,16 @@ def findNextQuestion():
             randomAnswer = possibleAnswers[randomAnswerKey]
             allCategories = apiClient.getAllRelations()
 
-            print("random answer: " + randomAnswer.getLabel())
+            #--commenting out debug strings --print("random answer: " + randomAnswer.getLabel())
 
             # Continue looking for validEdge if there are still categories to look for a question in
-            while len(allCategories) > 0:
+            while len(allCategories) > 0 and not askedQuestion:
                 randomCategory = random.choice(allCategories)
-                print("random category: " + randomCategory)
+                #--commenting out debug strings --print("random category: " + randomCategory)
                 allCategories.remove(randomCategory)                #remove so we don't repeat exploring this category if we re-iterate!
 
                 possibleEdges = generateRandomQuery(apiClient.getURI(randomAnswer.getLabel()), randomCategory)
+                #validEdge = getValidEdge(possibleEdges)
 
                 foundValidEdge = False
                 validEdge = None
@@ -189,14 +225,14 @@ def findNextQuestion():
                     if len(possibleEdges) > 0:
                         #1.) Pick a random index/random edge + see if it has high enough relatedness to "food"
                         rIndex = random.randint(0, len(possibleEdges) - 1)
-                        print(rIndex)
+                        #--commenting out debug strings --print(rIndex)
 
                         possibleEdge = possibleEdges[rIndex]["end"]["label"]        #"end" is correct only for our current methods
-                        print(possibleEdge)
+                        #--commenting out debug strings --print(possibleEdge)
                         del possibleEdges[rIndex]  # remove this edge from dictionary to not re-do it again if it doesn't work out
 
                         #possibleEdge has enough relatedness to ask a question about it! --> get out of while
-                        if getOverallRelatedness(possibleEdge) > 0.1:
+                        if getOverallRelatedness(possibleEdge) > MIN_RELATEDNESS and not(possibleEdge in list(allPosAttributes)) and not(possibleEdge in list(allNegAttributes)):
                             foundValidEdge = True
                             validEdge = possibleEdge
 
@@ -204,7 +240,9 @@ def findNextQuestion():
                     else:
                         break
 
+
                 #If found good edge --> can ask question:
+                #if validEdge is not None:
                 if foundValidEdge:
                     askedQuestion = True
 
@@ -218,11 +256,15 @@ def findNextQuestion():
                     if userInput == 1:
                         #1.) Create new Attribute to track in allAttributes[]
                         newAttribute = Attribute(randomCategory, validEdge)
-                        allAttributes.append(newAttribute)
+                        allPosAttributes[validEdge] = newAttribute
 
                         #2.) increase own probability, add attribute
+                        #--commenting out debug strings --print("answer: " + randomAnswer.getLabel() + "  before adding probability+ attribute: " + str(randomAnswer.getProbability()) +  "  " + str(randomAnswer.getAllAttributes()))
                         randomAnswer.addProbability()
                         randomAnswer.addAttribute(newAttribute)
+                        #--commenting out debug strings --print("answer: " + randomAnswer.getLabel() + "  before adding probability: + attribute: " + str(randomAnswer.getProbability()) +  "  " + str(randomAnswer.getAllAttributes()))
+                        possibleAnswers[randomAnswer.getLabel()] = randomAnswer
+
 
                         #Find other possibleAnswers to add to possibleAnswers{}
 
@@ -235,12 +277,12 @@ def findNextQuestion():
                         for node in response:
                             # Get the label, ensure we are using the root most form of the word
                             label = node["start"]["label"]
-                            print("Before getting root:" + label)
+                            #--commenting out debug strings --print("Before getting root:" + label)
                             label = apiClient.removeArticlesIn(label)
                             rootWord = apiClient.getRootWord(apiClient.getURI(label))
                             if rootWord is not None:
                                 label = rootWord  # only ever stores ROOT words, --> easier to check, don't have to worry about any different forms
-                            print('after getting root and removing articles: ' + label)
+                            #--commenting out debug strings --print('after getting root and removing articles: ' + label)
 
                             # If label IS a food, and NOT yet in possibleAnswers, store into validPossAnswers to incorporate into possibleAnswers later:
                             if apiClient.getIsFood(label):
@@ -249,7 +291,13 @@ def findNextQuestion():
                         # 3.) Insert list of possible answers correcting updating old possibleAnswers:
                         insertUpdatePossibleAnswers(newAttribute, validPossAnswers)
 
+                        #4.) Ask if highest probabilities of possibleAnswers are high enough yet
 
+
+                    #Said no --> store in allNegAttributes
+                    else:
+                        allNegAttributes[validEdge] = Attribute(randomCategory, validEdge)
+                        break       #can break out of while loop bc already asked a question
 
     else:
         #Choose either to base next question on location or, choose some interval of types of food on possibleAnswers and call this method again. (purpose of this: expands the possibleAnswer[])
@@ -263,14 +311,14 @@ def findNextQuestion():
             while not askedQuestion:
                 #Choose random edge, determine if its relatedness value to "food" is high enough, --> ask question about it if so:
                 rIndex = random.randint(0, len(edges)-1)
-                print(rIndex)
+                #--commenting out debug strings --print(rIndex)
 
                 edgeLabel = edges[rIndex]["end"]["label"]
-                print(edgeLabel)
+                #--commenting out debug strings --print(edgeLabel)
                 del edges[rIndex]   #remove this edge from dictionary to not re-do it again if it doesn't work out
 
 
-                if getOverallRelatedness(edgeLabel) > 0.1:
+                if getOverallRelatedness(edgeLabel) > MIN_RELATEDNESS and not(edgeLabel in list(allPosAttributes)) and not(edgeLabel in list(allNegAttributes)):
                     askedQuestion = True
 
                     #ask the question:
@@ -280,7 +328,7 @@ def findNextQuestion():
                     #If said yes --> (1) create a new Attribute to track, (2) find all possible answers that satify this new Attribute + save into possibleAnswers
                     if userInput == 1:
                         newAttribute = Attribute(apiClient.RELATION_LOCATION, edgeLabel)
-                        allAttributes.append(newAttribute)
+                        allPosAttributes[edgeLabel] = newAttribute
 
                         #Find all possibleAnswers: all nodes that IsA food & is AtLocation edgeLabel:
                         #1.) Get things located at:
@@ -291,12 +339,12 @@ def findNextQuestion():
                         for node in response:
                             #Get the label, ensure we are using the root most form of the word
                             label = node["start"]["label"]
-                            print("Before getting root:" + label)
+                            #--commenting out debug strings --print("Before getting root:" + label)
                             label = apiClient.removeArticlesIn(label)
                             rootWord = apiClient.getRootWord(apiClient.getURI(label))
                             if rootWord is not None:
                                 label = rootWord               #only ever stores ROOT words, --> easier to check, don't have to worry about any different forms
-                            print('after getting root and removing articles: '+label)
+                            #--commenting out debug strings --print('after getting root and removing articles: '+label)
 
 
                             #If label IS a food, and NOT yet in possibleAnswers, store into validPossAnswers to incorporate into possibleAnswers later:
@@ -307,6 +355,10 @@ def findNextQuestion():
                         #3.) Insert list of possible answers correcting updating old possibleAnswers:
                         insertUpdatePossibleAnswers(newAttribute, validPossAnswers)
 
+
+                    # Said no --> store in allNegAttributes
+                    else:
+                        allNegAttributes[edgeLabel] = Attribute(apiClient.RELATION_LOCATION, edgeLabel)
 
 
         #Otherwise --> do NOT choose a question, instead, pick a random range and populate random interval of isA relation into possibleAnswers, + call method again to eventually ask a q
@@ -324,63 +376,47 @@ def findNextQuestion():
                 if rootWord is not None:
                     answerLabel = rootWord
 
-                if not (answerLabel in possibleAnswers.keys()) and not (answerLabel in nonpossibleAnswers.keys()):
+                if not (answerLabel in list(possibleAnswers)) and not (answerLabel in list(nonpossibleAnswers)):
                         possibleAnswers[answerLabel] = Answer(None, answerLabel)
 
             #just for testing reasons
-            print("possAnswers:  ")
+            #--commenting out debug strings --print("possAnswers:  ")
             for answer in possibleAnswers.items():
-                print(answer[1].getLabel())
+                pass
+                #--commenting out debug strings --print(answer[1].getLabel())
 
             #Call again to keep initializing possibleAnswers, and eventually actually ask question
-            print("calling findNextQuestion() again")
-            findNextQuestion()
+            #--commenting out debug strings --print("calling findNextQuestion() again")
+            TestfindNextQuestion()
+
+
+    finalAnswers = gameFinished()
+    if len(finalAnswers) > 0:
+        print("We have your results...")
+        print("The food(s) that you really want RIGHT NOW are: ")
+        for answerLabel in finalAnswers:
+            print("- " + answerLabel)
+        return False
+
+    return True
 
 
 
-while True:
-    findNextQuestion()
-
-
-
- # category = {"breakfast":"Are you looking for breakfast? (1) Yes, (2) No", "lunch":"Are you looking for lunch? (1) Yes, (2) No", "dinner":"Are you looking for dinner? (1) Yes, (2) No", "dessert":"Are you looking for desserts? (1) Yes, (2) No"}
- # portion = {"full meal":"Do you want a full meal? (1) Yes, (2) No", "snack":"Do you want a snack? (1) Yes, (2) No", "finger food":"Would you like finger food? (1) Yes, (2) No", "ready-to-eat":"Would you like ready-to-eat food? (1) Yes, (2) No"}
- # type = {"beverage":"Would you like a beverage? (1) Yes, (2) No", "solid food":"Would you like solid food? (1) Yes, (2) No", "semi-solid food":"Would you like semi-solid food? (1) Yes, (2) No"}
- # flavor = {"sweet":"Would you like something sweet? (1) Yes, (2) No", "savory":"Would you like something savory? (1) Yes, (2) No", "sour":"Would you like something sour? (1) Yes, (2) No", "spicy":"Would you like spicy food? (1) Yes, (2) No", "bitter":"Would you like something bitter? (1) Yes, (2) No"}
- # restriction = {"vegan":"Do you want something vegan? (1) Yes, (2) No", "meat":"Are you able to eat meat? (1) Yes, (2) No", "gluten":"Are you able to eat gluten? (1) Yes, (2) No", "nuts":"Are you able to eat nuts? (1) Yes, (2) No", "dairy":"Are you able to eat dairy products? (1) Yes, (2) No"}
- #
- # #Randomly select a question to ask, however it may repeat if the user continuously answers 'no'
- # if currentQuestion == 1:
- #     return random.choice(list(category.items()))
- # if currentQuestion == 2:
- #     return random.choice(list(portion.items()))
- # if currentQuestion == 3:
- #     return random.choice(list(type.items()))
- # if currentQuestion == 4:
- #     return random.choice(list(flavor.items()))
- # else:
- #     return random.choice(list(restriction.items()))
+# while True:
+#     TestfindNextQuestion()
+#     print("Call TestfindNextQ() again..")
 
 
 #Purpose: Use API to determine if we found a good enough answer! E.g. is there anything else we could ask, how confident are we in this answer, etc.
 def gameFinished():
-    pass
- # path = 'http://api.conceptnet.io/c/en/' + userPreferences[0] #Add the user's data to the path (first item in userPreferences)
- # obj = requests.get(path).json() #Get method to retrieve the data
- # index = 0
- #
- # #Print out results from ConceptNet
- # for i in range(len(obj['edges'])):
- #     print(obj['edges'][i]['end']['label'])
- #     #if '/r/IsA' in obj['edges'][i]['end']['label']:
- #         #index = i
- #     for key in ['rel', 'surfaceText']:
- #         print(obj['edges'][i][key])
- #
- # #Print suggested item to user
- # print("Answer generated! You might enjoy: " + str(obj['edges'][index][key]))
- # print("---------------------------------------\n")
+    finalAnswers = []
 
+    for answer in possibleAnswers.items():
+        currProbability = answer[1].getProbability()
+        if currProbability >= MIN_WINNING_PROBABILITY:
+            finalAnswers.append(answer[1].getLabel())
+
+    return finalAnswers
 
 
 
@@ -392,21 +428,21 @@ def game():
  while notDone:
   #1.) Ask a question + provide choices
      #Make + call method to find a question to ask
-  question = findNextQuestion(currentCategory)
-  choice = getValidChoice(question[1], [1,2])
-
-  #2.) Get validated choice
-  # Only move to next question category after user has answered 'yes'
-  if choice == 1:
-      currentCategory = currentCategory + 1
-      userPreferences.append(question[0]) #saves the attributes the user answers 'yes', to help look for a suitable food item in API
-
-      # 3.) Check if can finish game
-      # Change notDone game finished
-      if currentCategory == 6:
-          print("User Preferences: " + str(userPreferences))
-          gameFinished() #return the suggested food
-          notDone = False
+  notDone = TestfindNextQuestion()
+  # choice = getValidChoice(question[1], [1,2])
+  #
+  # #2.) Get validated choice
+  # # Only move to next question category after user has answered 'yes'
+  # if choice == 1:
+  #     currentCategory = currentCategory + 1
+  #     userPreferences.append(question[0]) #saves the attributes the user answers 'yes', to help look for a suitable food item in API
+  #
+  #     # 3.) Check if can finish game
+  #     # Change notDone game finished
+  #     if currentCategory == 6:
+  #         print("User Preferences: " + str(userPreferences))
+  #         gameFinished() #return the suggested food
+  #         notDone = False
 
 
 
@@ -443,7 +479,4 @@ def main():
 
 
 
-
-
-
-#main()
+main()
